@@ -78,7 +78,6 @@ class Zbiornik:
     def srodek_x(self):
         return (self.x + self.width / 2)
 
-
     def draw(self, painter):
         if self.poziom > 0:
             h = self.height * self.poziom
@@ -94,6 +93,40 @@ class Zbiornik:
         painter.drawText(int(self.x), int(self.y - 10), self.nazwa)
 
 
+class Pompa:
+    def __init__(self, x, y, moc=1.2):
+        self.x = x
+        self.y = y
+        self.moc = moc
+        self.wlaczona = False
+
+    def wlacz(self):
+        self.wlaczona = True
+
+    def wylacz(self):
+        self.wlaczona = False
+
+    def toggle(self):
+        self.wlaczona = not self.wlaczona
+
+    def draw(self, painter):
+        # obudowa
+        painter.setPen(QPen(Qt.white, 3))
+        painter.setBrush(QColor(60, 60, 60))
+        painter.drawEllipse(self.x - 20, self.y - 20, 40, 40)
+
+        # środek (status)
+        kolor = QColor(0, 255, 0) if self.wlaczona else QColor(150, 0, 0)
+        painter.setBrush(kolor)
+        painter.drawEllipse(self.x - 8, self.y - 8, 16, 16)
+
+        # opis
+        painter.setPen(Qt.white)
+        painter.drawText(self.x - 25, self.y + 35, "Pompa")
+
+
+
+
 class SymulacjaKaskady(QWidget):
     def __init__(self):
         super().__init__()
@@ -101,7 +134,7 @@ class SymulacjaKaskady(QWidget):
         self.setWindowTitle("Kaskada: Dół -> Góra")
         self.setFixedSize(900, 600)
         self.setStyleSheet("background-color: #222;")
-
+        
         self.z1 = Zbiornik(400, 20, nazwa="Zbiornik 1")
         self.z1.aktualna_ilosc = 100
         self.z1.aktualizuj_poziom()
@@ -116,13 +149,26 @@ class SymulacjaKaskady(QWidget):
         self.rura2 = Rura([self.z1.punkt_dol_srodek(),(450, 200),(self.z3.srodek_x(),200), self.z3.punkt_gora_srodek()])
         self.rura3 = Rura([self.z2.punkt_dol_srodek(),(self.z2.srodek_x(),400),(self.z4.srodek_x(),400), self.z4.punkt_gora_srodek()])
         self.rura4 = Rura([self.z3.punkt_dol_srodek(),(self.z3.srodek_x(),400),(self.z5.srodek_x(),400), self.z5.punkt_gora_srodek()])
-        
-        
-        self.rury = [self.rura1, self.rura2, self.rura3, self.rura4]
-
-        
+        self.rura5 = Rura([self.z4.punkt_dol_srodek(),(self.z4.srodek_x(), 560),(80, 560),(80, 10),(405,10),self.z1.punkt_gora_srodek()])
+        self.rura6 = Rura([self.z5.punkt_dol_srodek(),(self.z5.srodek_x(), 560),(820, 560),(820, 10),(495,10),self.z1.punkt_gora_srodek()])
 
 
+
+
+        self.rury = [self.rura1, self.rura2, self.rura3, self.rura4, self.rura5, self.rura6]
+        
+
+
+        #pompa 
+        self.pompa1 = Pompa(150,460)
+        self.btn_pompa = QPushButton("Pompa ON/OFF", self)
+        self.btn_pompa.setGeometry(200, 420, 120, 30)
+        self.btn_pompa.clicked.connect(self.pompa1.toggle)
+
+        self.pompa2= Pompa(750,460)
+        self.btn_pompa2 = QPushButton("Pompa2 ON/OFF", self)
+        self.btn_pompa2.setGeometry(580, 420, 120, 30)
+        self.btn_pompa2.clicked.connect(self.pompa2.toggle)
 
         
 
@@ -201,9 +247,21 @@ class SymulacjaKaskady(QWidget):
         else:
             self.rura3.ustaw_przeplyw(False)
             self.rura4.ustaw_przeplyw(False)
+#pompa logika
+        if not self.z4.czy_pusty() and (self.pompa1.wlaczona):
+            self.z1.dodaj_ciecz(self.z4.usun_ciecz(self.flow_speed * self.pompa1.moc))
+            self.rura5.ustaw_przeplyw(True)
+        else:
+            self.rura5.ustaw_przeplyw(False)
+            
+        if not self.z5.czy_pusty() and (self.pompa2.wlaczona):
+            self.z1.dodaj_ciecz(self.z5.usun_ciecz(self.flow_speed * self.pompa2.moc))
+            self.rura6.ustaw_przeplyw(True)
+        else:
+            self.rura6.ustaw_przeplyw(False)
 
         self.update()
-#zrob tak żeby był warunek że zbiornik drugi musi sie zapelnic zeby zbiornik 3 sie zaczal napelniac
+
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
@@ -211,6 +269,8 @@ class SymulacjaKaskady(QWidget):
             r.draw(p)
         for z in self.zbiorniki:
             z.draw(p)
+        self.pompa1.draw(p)
+        self.pompa2.draw(p)
 
 
 if __name__ == "__main__":
