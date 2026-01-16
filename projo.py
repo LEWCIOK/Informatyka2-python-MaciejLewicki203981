@@ -14,7 +14,7 @@ class Rura:
 
     def ustaw_przeplyw(self, plynie):
         self.czy_plynie = plynie
-
+   
     def draw(self, painter):
         if len(self.punkty) < 2:
             return
@@ -152,7 +152,7 @@ class SymulacjaKaskady(QWidget):
         self.rura5 = Rura([self.z4.punkt_dol_srodek(),(self.z4.srodek_x(), 560),(80, 560),(80, 10),(405,10),self.z1.punkt_gora_srodek()])
         self.rura6 = Rura([self.z5.punkt_dol_srodek(),(self.z5.srodek_x(), 560),(820, 560),(820, 10),(495,10),self.z1.punkt_gora_srodek()])
 
-
+        
 
 
         self.rury = [self.rura1, self.rura2, self.rura3, self.rura4, self.rura5, self.rura6]
