@@ -1,8 +1,11 @@
 import sys
+from PyQt5 import QtWidgets
+from PyQt5 import QtCore
 from PyQt5.QtWidgets import QApplication, QWidget, QPushButton
 from PyQt5.QtCore import Qt, QTimer, QPointF
 from PyQt5.QtGui import QPainter, QColor, QPen, QPainterPath
-
+import numpy as np
+import pyqtgraph as pg
 
 class Rura:
     def __init__(self, punkty, grubosc=12, kolor=Qt.gray):
@@ -126,6 +129,97 @@ class Pompa:
 
 
 
+class PanelSterowania(QWidget):
+    def __init__(self, symulacja):
+        super().__init__()
+        self.sym = symulacja
+
+        self.setWindowTitle("Panel sterowania")
+        self.setFixedSize(400, 200)
+
+        # --- PRZYCISKI ---
+        self.btn_start = QPushButton("Start / Stop", self)
+        self.btn_start.setGeometry(20, 20, 120, 30)
+        self.btn_start.clicked.connect(self.sym.przelacz_symulacje)
+
+        self.btn_z2_plus = QPushButton("Z2 +", self)
+        self.btn_z2_plus.setGeometry(20, 70, 60, 30)
+        self.btn_z2_plus.clicked.connect(lambda: self.sym.napelnij(self.sym.z2))
+
+        self.btn_z2_minus = QPushButton("Z2 -", self)
+        self.btn_z2_minus.setGeometry(90, 70, 60, 30)
+        self.btn_z2_minus.clicked.connect(lambda: self.sym.oproznij(self.sym.z2))
+
+        self.btn_z3_plus = QPushButton("Z3 +", self)
+        self.btn_z3_plus.setGeometry(20, 105, 60, 30)
+        self.btn_z3_plus.clicked.connect(lambda: self.sym.napelnij(self.sym.z3))
+
+        self.btn_z3_minus = QPushButton("Z3 -", self)
+        self.btn_z3_minus.setGeometry(90, 105, 60, 30)
+        self.btn_z3_minus.clicked.connect(lambda: self.sym.oproznij(self.sym.z3))
+
+        self.btn_pompa1 = QPushButton("Pompa 1 ON/OFF", self)
+        self.btn_pompa1.setGeometry(20, 140, 150, 30)
+        self.btn_pompa1.clicked.connect(self.sym.pompa1.toggle)
+
+        self.btn_pompa2 = QPushButton("Pompa 2 ON/OFF", self)
+        self.btn_pompa2.setGeometry(200, 140, 150, 30)
+        self.btn_pompa2.clicked.connect(self.sym.pompa2.toggle)
+
+
+class RollingPlotWindow(QtWidgets.QMainWindow):
+    def __init__(self, symulacja):
+        super().__init__()
+
+        self.sym = symulacja
+        self.z1 = symulacja.z1
+        
+
+        # Konfiguracja głównego okna
+        self.graphWidget = pg.PlotWidget()
+        self.setCentralWidget(self.graphWidget)
+        self.graphWidget.setTitle("Poziom cieczy w z1 Dane w czasie rzeczywistym")
+        self.graphWidget.setLabel('left', 'Poziom cieczy')
+        self.graphWidget.setLabel('bottom', 'Czas ')
+        self.graphWidget.showGrid(x=True, y=True)
+
+        # Inicjalizacja bufora danych (50 zer na start)
+        self.data_range = 50
+        self.y_data = [0] * self.data_range
+        self.x_data = list(range(self.data_range))  # Oś X: 0..49
+
+        # Referencja do linii wykresu (aby ją potem aktualizować)
+        self.data_line = self.graphWidget.plot(
+            self.x_data,
+            self.y_data,
+            pen='g'
+        )
+
+        # Zmienna pomocnicza do generowania "czasu" dla funkcji sin()
+        self.time_counter = 0
+
+        # Timer
+        self.timer = QtCore.QTimer()
+        self.timer.setInterval(500)  # 500 ms = 0.5 s
+        self.timer.timeout.connect(self.update_plot_data)
+        self.timer.start()
+
+    def update_plot_data(self):
+        # 1. Przesunięcie czasu
+        self.time_counter += 0.2
+
+        # 2. Generowanie nowej danej: sin(czas + losowość)
+        
+        new_value = self.z1.aktualna_ilosc
+
+        # 3. Aktualizacja bufora danych
+        self.y_data = self.y_data[1:]      # usunięcie najstarszej próbki
+        self.y_data.append(new_value)      # dodanie nowej
+
+        # 4. Odświeżenie wykresu
+        self.data_line.setData(self.x_data, self.y_data)
+
+
 
 class SymulacjaKaskady(QWidget):
     def __init__(self):
@@ -152,67 +246,25 @@ class SymulacjaKaskady(QWidget):
         self.rura5 = Rura([self.z4.punkt_dol_srodek(),(self.z4.srodek_x(), 560),(80, 560),(80, 10),(405,10),self.z1.punkt_gora_srodek()])
         self.rura6 = Rura([self.z5.punkt_dol_srodek(),(self.z5.srodek_x(), 560),(820, 560),(820, 10),(495,10),self.z1.punkt_gora_srodek()])
 
-        
-
-
         self.rury = [self.rura1, self.rura2, self.rura3, self.rura4, self.rura5, self.rura6]
         
-
-
         #pompa 
         self.pompa1 = Pompa(150,460)
-        self.btn_pompa = QPushButton("Pompa ON/OFF", self)
-        self.btn_pompa.setGeometry(200, 420, 120, 30)
-        self.btn_pompa.clicked.connect(self.pompa1.toggle)
-
         self.pompa2= Pompa(750,460)
-        self.btn_pompa2 = QPushButton("Pompa2 ON/OFF", self)
-        self.btn_pompa2.setGeometry(580, 420, 120, 30)
-        self.btn_pompa2.clicked.connect(self.pompa2.toggle)
-
         
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.logika_przeplywu)
-
-        self.btn_start = QPushButton("Start / Stop", self)
-        self.btn_start.setGeometry(20, 570, 120, 30)
-        self.btn_start.clicked.connect(self.przelacz_symulacje)
-
-        # --- PANEL PRZYCISKÓW ---
-        self.dodaj_przyciski_zbiornikow()
-
         self.running = False
         self.flow_speed = 0.8
 
+       
+
+        
 
 
-    # ===== PRZYCISKI =====
-    def dodaj_przyciski_zbiornikow(self):
-        y = 570
-        x = 170
-        step = 230
 
-        self.btn_z1_plus = QPushButton("Z1 +", self)
-        self.btn_z1_minus = QPushButton("Z1 -", self)
-        self.btn_z1_plus.setGeometry(x, y, 50, 30)
-        self.btn_z1_minus.setGeometry(x + 60, y, 50, 30)
-        self.btn_z1_plus.clicked.connect(lambda: self.napelnij(self.z1))
-        self.btn_z1_minus.clicked.connect(lambda: self.oproznij(self.z1))
-
-        self.btn_z2_plus = QPushButton("Z2 +", self)
-        self.btn_z2_minus = QPushButton("Z2 -", self)
-        self.btn_z2_plus.setGeometry(x + step, y, 50, 30)
-        self.btn_z2_minus.setGeometry(x + step + 60, y, 50, 30)
-        self.btn_z2_plus.clicked.connect(lambda: self.napelnij(self.z2))
-        self.btn_z2_minus.clicked.connect(lambda: self.oproznij(self.z2))
-
-        self.btn_z3_plus = QPushButton("Z3 +", self)
-        self.btn_z3_minus = QPushButton("Z3 -", self)
-        self.btn_z3_plus.setGeometry(x + 2 * step, y, 50, 30)
-        self.btn_z3_minus.setGeometry(x + 2 * step + 60, y, 50, 30)
-        self.btn_z3_plus.clicked.connect(lambda: self.napelnij(self.z3))
-        self.btn_z3_minus.clicked.connect(lambda: self.oproznij(self.z3))
+  
 
     # ===== SLOTY =====
     def napelnij(self, zbiornik):
@@ -242,10 +294,15 @@ class SymulacjaKaskady(QWidget):
         if self.z2.aktualna_ilosc > 5 and not self.z4.czy_pelny():
             self.z4.dodaj_ciecz(self.z2.usun_ciecz(self.flow_speed))
             self.rura3.ustaw_przeplyw(True)
+           
+        else:
+            self.rura3.ustaw_przeplyw(False)
+            
+
+        if self.z3.aktualna_ilosc > 5 and not self.z5.czy_pelny():
             self.z5.dodaj_ciecz(self.z3.usun_ciecz(self.flow_speed))
             self.rura4.ustaw_przeplyw(True)
         else:
-            self.rura3.ustaw_przeplyw(False)
             self.rura4.ustaw_przeplyw(False)
 #pompa logika
         if not self.z4.czy_pusty() and (self.pompa1.wlaczona):
@@ -259,6 +316,24 @@ class SymulacjaKaskady(QWidget):
             self.rura6.ustaw_przeplyw(True)
         else:
             self.rura6.ustaw_przeplyw(False)
+        if not self.z2.czy_pusty() and (self.pompa1.wlaczona):
+            self.z1.dodaj_ciecz(self.z2.usun_ciecz(self.flow_speed * self.pompa1.moc))
+            self.rura5.ustaw_przeplyw(True)
+        else:
+            self.rura5.ustaw_przeplyw(False)
+        if not self.z3.czy_pusty() and (self.pompa2.wlaczona):
+            self.z1.dodaj_ciecz(self.z3.usun_ciecz(self.flow_speed * self.pompa2.moc))
+            self.rura6.ustaw_przeplyw(True)
+        else:
+            self.rura6.ustaw_przeplyw(False)
+        if (self.pompa1.wlaczona == True) and (self.pompa2.wlaczona == True) and self.z1.aktualna_ilosc > 99.0:
+            self.z2.dodaj_ciecz(self.z1.usun_ciecz(self.flow_speed))
+            self.z3.dodaj_ciecz(self.z1.usun_ciecz(self.flow_speed))
+            self.rura1.ustaw_przeplyw(True)
+            self.rura2.ustaw_przeplyw(True)
+        else:
+            self.rura1.ustaw_przeplyw(False)
+            self.rura2.ustaw_przeplyw(False)
 
         self.update()
 
@@ -275,6 +350,12 @@ class SymulacjaKaskady(QWidget):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    w = SymulacjaKaskady()
-    w.show()
+
+    sym = SymulacjaKaskady()
+    panel = PanelSterowania(sym)
+    main = RollingPlotWindow(sym)
+    main.show()
+    sym.show()
+    panel.show()
+
     sys.exit(app.exec_())
